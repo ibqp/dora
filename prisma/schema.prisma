@@ -1,0 +1,144 @@
+// DORA — Requirements Discovery Tool
+// Data model: MASTER_SPEC.md §5 (requirements structure) and §7 (entities).
+//
+// JSON columns are validated by the Zod schemas in src/lib/requirements/schemas.ts;
+// never read or write them without going through those schemas.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+/// Discovery scenario chosen by the rule-based classifier (§4).
+enum Scenario {
+  CUSTOMER_CHURN
+  SALES_PERFORMANCE
+  NETWORK_PERFORMANCE
+  GENERIC_ANALYTICS
+}
+
+/// Predefined DORA roles (§4). Roles only change question priorities and templates.
+enum AssistantRole {
+  REQUIREMENTS_DISCOVERY
+  XY_PROBLEM_DIAGNOSTIC
+  DATA_REQUIREMENTS_ANALYST
+  BRD_GENERATOR
+}
+
+/// The six discovery stages, in state-machine order (§4).
+enum DiscoveryStage {
+  INITIAL_REQUEST
+  BUSINESS_PROBLEM_VALIDATION
+  REQUIREMENTS_DISCOVERY
+  REQUIREMENTS_CLARIFICATION
+  REQUIREMENTS_REVIEW
+  BRD_GENERATION
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+/// READY_FOR_REVIEW means "all required fields complete", not business approval (§6).
+enum DocumentStatus {
+  DRAFT
+  READY_FOR_REVIEW
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+model ChatSession {
+  id                  String         @id @default(cuid())
+  title               String         @db.VarChar(200)
+  /// Null until the rule-based classifier has assigned a scenario.
+  scenario            Scenario?
+  assistantRole       AssistantRole
+  currentStage        DiscoveryStage @default(INITIAL_REQUEST)
+  /// Processing lock: set while a message is being processed, so requests cannot overlap.
+  processingToken     String?
+  processingStartedAt DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  messages         Message[]
+  requirementState RequirementState?
+  brd              BusinessRequirementsDocument?
+
+  @@index([updatedAt(sort: Desc)])
+}
+
+model Message {
+  id              String      @id @default(cuid())
+  sessionId       String
+  /// Database-assigned insertion order; messages are always read ordered by this column.
+  sequence        Int         @default(autoincrement())
+  role            MessageRole
+  content         String
+  /// Client-generated idempotency key for user submissions (unique across all messages).
+  clientRequestId String?     @unique
+  createdAt       DateTime    @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, sequence])
+}
+
+/// Structured requirements for one session, stored independently of message history.
+model RequirementState {
+  id        String @id @default(cuid())
+  sessionId String @unique
+
+  /// Map of all 18 requirement fields → { value, status, clarificationCount }.
+  fields Json
+
+  /// Field DORA is currently asking about (a RequirementFieldKey), or null.
+  currentField String?
+
+  /// Solution named in the initial request (XY-problem context; not a requirement).
+  proposedSolution String?
+
+  /// completedRequiredFields / totalRequiredFields * 100, rounded (0–100).
+  completenessPercentage Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model BusinessRequirementsDocument {
+  id        String         @id @default(cuid())
+  sessionId String         @unique
+  title     String         @db.VarChar(200)
+  status    DocumentStatus @default(DRAFT)
+
+  /// Map of all 18 requirement fields → effective text value, or null when not specified.
+  content Json
+
+  /// Map of manually edited field keys → { editedAt }. Fields absent here are generated content.
+  manualEdits Json @default("{}")
+
+  /// Completeness of the effective saved content (0–100).
+  completenessPercentage Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt(sort: Desc)])
+}
+
+/// Single shared settings record (id is always 1, enforced by a CHECK constraint).
+model AppSettings {
+  id                   Int           @id @default(1)
+  mockResponseDelayMs  Int           @default(1500)
+  defaultAssistantRole AssistantRole @default(REQUIREMENTS_DISCOVERY)
+  updatedAt            DateTime      @updatedAt
+}

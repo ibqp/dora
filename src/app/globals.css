@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * DORA theme — light only, Telekom-inspired.
+ * Neutrals are slate; the single accent is magenta (#E20074).
+ * Components consume the semantic tokens below (via shadcn/ui), never raw hex values.
+ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces: white and very light slate */
+  --background: oklch(1 0 0); /* #FFFFFF */
+  --foreground: oklch(0.208 0.04 265.75); /* slate-900 */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.208 0.04 265.75);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.208 0.04 265.75);
+
+  /* Accent: Telekom-inspired magenta (#E20074, 4.68:1 against white) */
+  --primary: oklch(0.59 0.239 1.31);
+  --primary-foreground: oklch(1 0 0);
+
+  --secondary: oklch(0.968 0.007 247.9); /* slate-100 */
+  --secondary-foreground: oklch(0.208 0.04 265.75);
+  --muted: oklch(0.968 0.007 247.9);
+  --muted-foreground: oklch(0.554 0.041 257.42); /* slate-500 */
+  --accent: oklch(0.967 0.017 343.61); /* magenta tint #FDF0F7 */
+  --accent-foreground: oklch(0.523 0.212 0.74); /* deep magenta #C00063 */
+
+  /* Status */
+  --destructive: oklch(0.577 0.215 27.33); /* red-600 */
+  --success: oklch(0.527 0.137 150.07); /* green-700 */
+  --warning: oklch(0.555 0.146 49); /* amber-700 */
+
+  /* Lines and focus */
+  --border: oklch(0.929 0.013 255.51); /* slate-200 */
+  --input: oklch(0.929 0.013 255.51);
+  --ring: oklch(0.59 0.239 1.31);
+  --radius: 0.625rem;
+
+  /* Sidebar: very light slate panel with magenta selection */
+  --sidebar: oklch(0.984 0.003 247.86); /* slate-50 */
+  --sidebar-foreground: oklch(0.372 0.039 257.29); /* slate-700 */
+  --sidebar-primary: oklch(0.59 0.239 1.31);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.967 0.017 343.61);
+  --sidebar-accent-foreground: oklch(0.523 0.212 0.74);
+  --sidebar-border: oklch(0.929 0.013 255.51);
+  --sidebar-ring: oklch(0.59 0.239 1.31);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+}
