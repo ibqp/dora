@@ -62,6 +62,7 @@ export function SessionChat({ sessionId }: { sessionId: string }) {
     return (
       <PageContent width="narrow">
         <EmptyState
+          headingLevel="h1"
           icon={SearchX}
           title="Discovery session not found"
           description="This session does not exist or has been deleted."
@@ -82,6 +83,7 @@ export function SessionChat({ sessionId }: { sessionId: string }) {
     return (
       <PageContent width="narrow">
         <EmptyState
+          headingLevel="h1"
           icon={TriangleAlert}
           title="The conversation could not be loaded"
           description={state.message}

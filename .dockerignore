@@ -1,0 +1,33 @@
+# Keep the build context small and free of secrets and local artefacts.
+
+# Secrets / local configuration (never baked into the image)
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated output (rebuilt inside the image)
+node_modules
+.next
+.next.nosync
+out
+coverage
+src/generated
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# iCloud conflict copies ("file 2.ts")
+**/* 2
+**/* 2.*
+
+# VCS, editors, OS
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+*.log
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+compose.yaml

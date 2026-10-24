@@ -4,6 +4,7 @@ import { FieldStatus, REQUIREMENT_FIELD_KEYS } from "@/lib/requirements/fields";
 import { brdContentSchema, createInitialRequirementFields, type RequirementFields } from "@/lib/requirements/schemas";
 
 import {
+  buildBrdPdfFileName,
   buildBrdSections,
   buildBrdTitle,
   calculateBrdCompleteness,
@@ -91,5 +92,16 @@ describe("BRD structure", () => {
   it("derives the title from the session title", () => {
     expect(buildBrdTitle("Churn analysis")).toBe("BRD: Churn analysis");
     expect(buildBrdTitle("x".repeat(250))).toHaveLength(200);
+  });
+});
+
+describe("buildBrdPdfFileName", () => {
+  it("derives a safe file name from the title", () => {
+    expect(buildBrdPdfFileName("BRD: Churn analysis")).toBe("BRD Churn analysis.pdf");
+    expect(buildBrdPdfFileName("BRD: Q3/Q4 sales — \"North\" region?")).toBe("BRD Q3 Q4 sales North region.pdf");
+    expect(buildBrdPdfFileName("BRD: Ärger mit Kündigungen")).toBe("BRD Ärger mit Kündigungen.pdf");
+    expect(buildBrdPdfFileName("../../etc/passwd")).toBe("etc passwd.pdf");
+    expect(buildBrdPdfFileName("***")).toBe("BRD.pdf");
+    expect(buildBrdPdfFileName("x".repeat(300))).toHaveLength(104);
   });
 });

@@ -13,8 +13,9 @@
 # testing
 /coverage
 
-# next.js
+# next.js (build output dir is ".next.nosync" so iCloud does not sync it)
 /.next/
+/.next.nosync/
 /out/
 
 # production

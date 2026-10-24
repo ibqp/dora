@@ -21,8 +21,8 @@ export function RoleSelect({ value, onChange, disabled }: RoleSelectProps) {
       <SelectContent align="end" position="popper" className="w-80">
         {ROLES.map((role) => (
           <SelectItem key={role} value={role} className="items-start py-2">
-            <span className="flex flex-col gap-0.5">
-              <span className="font-medium">{ROLE_PROFILES[role].label}</span>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate font-medium">{ROLE_PROFILES[role].label}</span>
               <span className="text-xs text-muted-foreground in-data-[slot=select-value]:hidden">
                 {ROLE_PROFILES[role].summary}
               </span>

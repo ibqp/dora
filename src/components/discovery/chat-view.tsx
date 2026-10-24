@@ -236,7 +236,7 @@ function MessageList({ messages, pending, onRetry, onDiscard }: MessageListProps
   const isEmpty = messages.length === 0 && !pending;
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="relative min-h-0 flex-1 overflow-y-auto">
       <div
         role="log"
         aria-label="Conversation"

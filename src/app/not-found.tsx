@@ -1,4 +1,5 @@
 import { SearchX } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/common/empty-state";
@@ -7,11 +8,14 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/config/navigation";
 
+export const metadata: Metadata = { title: "Page not found" };
+
 export default function NotFound() {
   return (
     <AppShell>
       <PageContent width="narrow">
         <EmptyState
+          headingLevel="h1"
           icon={SearchX}
           title="Page not found"
           description="The page you are looking for does not exist or is no longer available."

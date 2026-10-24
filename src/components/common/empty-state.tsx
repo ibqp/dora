@@ -11,6 +11,8 @@ interface EmptyStateProps {
   action?: ReactNode;
   /** `card` renders a bordered panel; `plain` renders without a frame. */
   variant?: "card" | "plain";
+  /** `h1` when the empty state is the whole page (no PageHeader), otherwise `h2`. */
+  headingLevel?: "h1" | "h2";
   className?: string;
 }
 
@@ -20,6 +22,7 @@ export function EmptyState({
   description,
   action,
   variant = "card",
+  headingLevel: Heading = "h2",
   className,
 }: EmptyStateProps) {
   return (
@@ -33,7 +36,7 @@ export function EmptyState({
       <span className="flex size-11 items-center justify-center rounded-full bg-accent text-accent-foreground">
         <Icon className="size-5" aria-hidden />
       </span>
-      <h2 className="mt-4 text-base font-semibold tracking-tight">{title}</h2>
+      <Heading className="mt-4 text-base font-semibold tracking-tight">{title}</Heading>
       {description ? (
         <p className="mt-1.5 max-w-md text-sm text-pretty text-muted-foreground">{description}</p>
       ) : null}

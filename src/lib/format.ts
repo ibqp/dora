@@ -13,3 +13,10 @@ export function formatMessageTime(iso: string, now: Date = new Date()): string {
 export function formatFullDateTime(iso: string): string {
   return fullFormat.format(new Date(iso));
 }
+
+const utcFormat = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
+
+/** Time-zone independent date and time for server-rendered documents: "23 Oct 2026, 14:05 UTC". */
+export function formatUtcDateTime(iso: string): string {
+  return `${utcFormat.format(new Date(iso))} UTC`;
+}

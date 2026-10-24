@@ -1,5 +1,6 @@
 /** Typed browser client for the chat API. Errors are normalized to ApiClientError. */
 import type { AssistantRole } from "@/generated/prisma/enums";
+import type { RequirementFieldKey } from "@/lib/requirements/fields";
 
 import type {
   ApiErrorCode,
@@ -9,6 +10,7 @@ import type {
   BrdResponse,
   BrdSummary,
   ListBrdsResponse,
+  RegenerateBrdResponse,
   ChatSessionDetail,
   ChatSessionResponse,
   ChatSessionSummary,
@@ -16,6 +18,7 @@ import type {
   RequirementsProgress,
   RequirementsResponse,
   SendMessageResponse,
+  SettingsDto,
   SettingsResponse,
   UpdateChatResponse,
 } from "./types";
@@ -48,10 +51,9 @@ function isApiErrorResponse(value: unknown): value is ApiErrorResponse {
   );
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let response: Response;
+async function send(path: string, init: RequestInit = {}): Promise<Response> {
   try {
-    response = await fetch(path, {
+    return await fetch(path, {
       ...init,
       headers: { ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
       cache: "no-store",
@@ -59,22 +61,44 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiClientError(0, "NETWORK_ERROR", "The server could not be reached. Check your connection and try again.");
   }
+}
 
-  if (response.status === 204) return undefined as T;
+const unexpectedResponse = (status: number) =>
+  new ApiClientError(status, "UNEXPECTED_RESPONSE", "The server returned an unexpected response.");
 
+/** Error of a non-OK response, from its JSON error body. */
+async function errorFrom(response: Response): Promise<ApiClientError> {
   let body: unknown;
   try {
     body = await response.json();
   } catch {
-    throw new ApiClientError(response.status, "UNEXPECTED_RESPONSE", "The server returned an unexpected response.");
+    return unexpectedResponse(response.status);
   }
-  if (!response.ok) {
-    if (isApiErrorResponse(body)) {
-      throw new ApiClientError(response.status, body.error.code, body.error.message, body.error.issues ?? []);
-    }
-    throw new ApiClientError(response.status, "UNEXPECTED_RESPONSE", "The server returned an unexpected response.");
+  return isApiErrorResponse(body)
+    ? new ApiClientError(response.status, body.error.code, body.error.message, body.error.issues ?? [])
+    : unexpectedResponse(response.status);
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await send(path, init);
+  if (!response.ok) throw await errorFrom(response);
+  if (response.status === 204) return undefined as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw unexpectedResponse(response.status);
   }
-  return body as T;
+}
+
+/** Binary download (e.g. a PDF); errors are normalized like JSON requests. */
+async function download(path: string): Promise<Blob> {
+  const response = await send(path);
+  if (!response.ok) throw await errorFrom(response);
+  try {
+    return await response.blob();
+  } catch {
+    throw new ApiClientError(0, "NETWORK_ERROR", "The download was interrupted. Please try again.");
+  }
 }
 
 export const chatApi = {
@@ -133,11 +157,38 @@ export const brdApi = {
       })
     ).brd;
   },
+
+  /** Saves manual edits; only the fields sent are changed. */
+  async update(
+    brdId: string,
+    update: { title?: string; content?: Partial<Record<RequirementFieldKey, string | null>> },
+  ): Promise<BrdDetail> {
+    return (
+      await request<BrdResponse>(`/api/brds/${encodeURIComponent(brdId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(update),
+      })
+    ).brd;
+  },
+
+  /** PDF of the saved BRD (manual edits included), rendered on the server. */
+  async pdf(brdId: string): Promise<Blob> {
+    return download(`/api/brds/${encodeURIComponent(brdId)}/pdf`);
+  },
+
+  /** Fills empty fields from the latest discovery requirements; content is kept. */
+  async regenerate(brdId: string): Promise<RegenerateBrdResponse> {
+    return request<RegenerateBrdResponse>(`/api/brds/${encodeURIComponent(brdId)}/regenerate`, { method: "POST" });
+  },
 };
 
 export const settingsApi = {
-  async get(): Promise<SettingsResponse["settings"]> {
+  async get(): Promise<SettingsDto> {
     return (await request<SettingsResponse>("/api/settings")).settings;
+  },
+
+  async update(update: { defaultAssistantRole?: AssistantRole; mockResponseDelayMs?: number }): Promise<SettingsDto> {
+    return (await request<SettingsResponse>("/api/settings", { method: "PATCH", body: JSON.stringify(update) })).settings;
   },
 };
 

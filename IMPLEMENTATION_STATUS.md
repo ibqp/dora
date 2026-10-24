@@ -1,6 +1,6 @@
 # DORA — Implementation Status
 
-**Baseline date:** 2026-10-23 · **Audit:** Phase 08.5 (no application code, schema, migrations or data changed)
+**Last update:** 2026-10-24 · Phase 12 (final verification, Docker, deployment preparation) · previous audit: Phase 08.5
 **Source of truth:** [`MASTER_SPEC.md`](MASTER_SPEC.md) · Setup and API reference: [`README.md`](README.md)
 
 ## 1. Overview
@@ -20,12 +20,19 @@ Router, Cache Components), TypeScript strict, Tailwind v4 + shadcn/ui, PostgreSQ
 | 06 | Discovery chat | **Complete** |
 | 07 | Progress & roles | **Complete** |
 | 08 | BRD generation | **Complete** |
-| 09+ | BRD editor & regeneration, PDF export, settings editing, Railway deployment | Not started |
+| 09 | BRD editor & regeneration | **Complete** (§3, Phase 09) |
+| 10 | PDF export | **Complete** (§3, Phase 10; Railway runtime not verified) |
+| 11 | Settings & UX polish | **Complete** (§3, Phase 11) |
+| 12 | Final verification, Docker, deployment preparation | **Complete** (§3, Phase 12) — **not deployed**: Railway deployment is a manual step ([`RAILWAY_DEPLOYMENT.md`](RAILWAY_DEPLOYMENT.md)) |
 
-> **Repository state:** none of Phases 01–08 is committed. `git log` contains only the initial
-> commit; all ~124 source files are untracked. See issue H1.
+> **Repository state:** last commit `1bdd255 Phase 08.5`; Phases 09–12 are **uncommitted** in the
+> working tree. Railway builds from GitHub, so everything (incl. `assets/`, `docker/`, the fourth
+> migration) must be committed and pushed before deploying.
 
-## 2. Verification summary (this audit)
+## 2. Verification summary
+
+Rows reflect the Phase 08.5 audit unless marked with a later phase, which were re-run after that
+phase.
 
 Legend — **A** automated test · **M** manual run during this audit (browser automation or curl
 against a running server) · **S** static code inspection · **NV** not verified.
@@ -33,17 +40,25 @@ against a running server) · **S** static code inspection · **NV** not verified
 | Check | Result | Notes |
 | --- | --- | --- |
 | `prisma validate`, `prisma format --check` | PASS | |
-| TypeScript (`npm run typecheck`) | PASS in a clean copy; **FAIL in working tree** | 386 duplicate `* 2.*` files in `.next/` (sync conflict copies) cause `Duplicate identifier 'LayoutProps'` — environment issue H2, not a code defect |
+| `prisma validate` *(Phase 12)* | PASS | no Prisma schema change since Phase 11 (migration `20261023230000_settings_delay_bounds`, CHECK only) |
+| TypeScript + ESLint (`npm run check`) *(Phase 12)* | PASS | 0 errors, 0 warnings |
+| TypeScript (`npm run typecheck`) | PASS | failed in the working tree during the audit because of iCloud conflict copies in `.next/` (H2); passes since the build output moved to `.next.nosync/` |
 | ESLint | PASS | 0 problems |
-| Production build (`npm run build`, no `DATABASE_URL`) | PASS (clean copy) | 17 routes; dynamic routes partially prerendered |
-| Unit tests | PASS 163/163 | 12 files |
-| Integration tests (real PostgreSQL, `TEST_DATABASE_URL`) | PASS 59/59 | 5 files; tests remove only their own records |
+| Production build (`npm run build`, no `DATABASE_URL`) *(Phase 12)* | PASS | 20 routes (Phase 12 adds `/api/health`); regular output locally, standalone output in the Docker build |
+| Unit tests *(Phase 12)* | PASS 176/176 | 14 files |
+| Integration tests (real PostgreSQL) *(Phase 12)* | PASS 79/79 on PostgreSQL 14.20 (local, final run incl. new `health.db.test.ts`); PASS 78/78 on PostgreSQL 17.11 (Docker, fresh `dora_test`, run before the health test was added) | tests remove only their own records and restore the shared settings row |
+| Docker image build *(Phase 12)* | PASS | `docker build` linux/arm64 (native) and `docker buildx --platform linux/amd64` (emulated, 219 s); see §3 Phase 12 |
+| Docker runtime (Compose: app + PostgreSQL 17) *(Phase 12)* | PASS | migrations on a fresh DB, health, endpoints, acceptance A–H 24/24, persistence across restart / down-up / rebuild, PDF in the container |
 | Migrations | PASS | dev & test DB up to date, no drift; all 3 migrations applied to a new empty DB; settings row created, no demo data; FKs `ON DELETE CASCADE`; CHECK constraints present |
 | Browser workflows (production server, isolated `dora_audit` DB) | PASS 80/80 | chat (31), progress & roles (27), BRD (22) — scripts are outside the repo (issue M2) |
+| Settings, keyboard & dialog accessibility browser workflow *(Phase 11)* | PASS 32/32 | production server, `dora_phase09`, headless Chrome; settings restored and test sessions deleted afterwards (M2: script outside the repo) |
+| axe-core scan of all pages at 1440 px + overflow check at 1440/1024/900 px *(Phase 11)* | PASS (0 violations, no overflow) | new discovery, session chat, BRD list (empty/filled), BRD editor, settings, 404, unknown session/BRD; dialogs/menus scanned in the workflow above (page-level rules hidden by modal popups excluded, focus trap checked instead) |
+| PDF export browser workflow *(Phase 10, re-run in Phase 11)* | PASS 18/18 | production server, `dora_phase09` DB, headless Chrome: Export PDF click → download → PDF parsed with pdf.js; script outside the repo (M2); DB left empty |
+| BRD editor browser workflow *(Phase 09, re-run in Phases 10 and 11)* | PASS 44/44 | production server on a dedicated `dora_phase09` DB, headless Chrome via Playwright; script outside the repo (M2); the test session was deleted afterwards (DB left empty) |
 | Dev server (`next dev`) | PASS | pages + API + first message |
 | Database unreachable | PASS | all API routes → `503 DATABASE_UNAVAILABLE` JSON; static page shells still render |
-| Railway deployment | **NV** | never deployed; see H3, M1 |
-| PostgreSQL version parity | **NV** | verified on PostgreSQL 14 locally only |
+| Railway deployment | **NV** | not deployed (manual step by the owner); guide in `RAILWAY_DEPLOYMENT.md` |
+| PostgreSQL version parity *(Phase 12)* | PASS (14, 17) | full DB suite and the container on PostgreSQL 17; Railway's actual version NV |
 
 ### Critical workflows
 
@@ -61,6 +76,11 @@ against a running server) · **S** static code inspection · **NV** not verified
 | Assistant role switching (persisted; requirements intact; next reply uses new role) | PASS | A (`requirements.db.test.ts`), M |
 | BRD from structured requirements (never invented) | PASS | A (`generation.test.ts`, `brd.db.test.ts`), M (17 × "Not specified") |
 | Incomplete draft generation (warning + explicit consent) | PASS | A (409 without `allowIncomplete`), M (dialog) |
+| Manual BRD edits persist; unsaved edits are not saved *(Phase 09)* | PASS | A (`brds/[id]/brd.db.test.ts`), M (API unchanged while dirty; value restored after reload) |
+| Regeneration preserves manual edits, keeps BRD id (Scenario E) *(Phase 09)* | PASS | A (unit + DB), M |
+| BRD status/completeness from saved content *(Phase 09)* | PASS | A (clear → Draft, fill → Ready for Review), M (11 % → 100 % → 94 %) |
+| Settings persist; default role for new sessions; existing roles unchanged; delay applied to the next reply *(Phase 11)* | PASS | A (`settings.db.test.ts`: delay mock called with the new value), M (reply after 766 ms with 500 ms set, 2,873 ms with 2,500 ms) |
+| PDF export of the saved BRD (Scenario F) *(Phase 10)* | PASS | A (`pdf.db.test.ts`, `brd-pdf.test.ts`), M (download via button, content checked) |
 | Exactly one BRD per session (incl. concurrent requests) | PASS | A (5 concurrent → 1), M |
 | Session deletion cascades (messages, requirements, BRD) | PASS | A, M, S (FK `confdeltype = c`) |
 | Overlap/duplicate protection (lock + idempotency key) | PASS | A (409 `SESSION_BUSY`, replay, concurrent first messages), M (double Enter → 1 request) |
@@ -75,14 +95,14 @@ against a running server) · **S** static code inspection · **NV** not verified
 | `src/` structure, theme tokens (light only, magenta `#E20074`) | PASS | S |
 | `.env.example`, `.gitignore` (secrets excluded, template kept) | PASS | S |
 | Scripts, README setup | PASS | S |
-| Typecheck/lint/build pass | PARTIAL | pass in clean copy; working-tree typecheck blocked by H2 |
+| Typecheck/lint/build pass | PASS | after the H2 fix (`distDir: ".next.nosync"`) |
 
 ### Phase 02 — Database & Prisma
 | Requirement | Status | Evidence |
 | --- | --- | --- |
 | 5 entities, enums, 18 fields in validated JSON | PASS | S, A |
 | Relations, unique `sessionId`, indexes, cascade delete | PASS | A, S |
-| Clarification counters, manual-edit metadata column | PASS | S (`manualEdits` not yet written — Phase 09) |
+| Clarification counters, manual-edit metadata column | PASS | S (`manualEdits` written since Phase 09) |
 | Migrations + single settings record, no demo data | PASS | M (fresh DB) |
 | Reusable DB client (lazy, works without DB at build) | PASS | build without `DATABASE_URL` |
 
@@ -148,12 +168,116 @@ against a running server) · **S** static code inspection · **NV** not verified
 | Exactly one BRD per session; persisted; list/create/detail APIs | PASS | A, M |
 | DORA's BRD suggestion when sufficiently complete | PASS | A, M (after review confirmation) |
 
-### Specification items not yet implemented (later phases)
-BRD editor (`PATCH /api/brds/[id]`, unsaved-change warning), regeneration
-(`POST /api/brds/[id]/regenerate`, manual-edit preservation), PDF export
-(`GET /api/brds/[id]/pdf`), settings editing (`PATCH /api/settings`), Railway deployment
-instructions and deployment, acceptance scenarios **E** (manual edit survives regeneration) and
-**F** (PDF). Scenarios A, B, C, D, G, H: PASS.
+### Phase 09 — BRD editor & regeneration
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Dedicated editor page: title, status, created/updated, source session link | PASS | M |
+| Editable input for the title and each of the 18 fields (seven sections) | PASS | M (18 text areas + title input) |
+| Save Changes persists explicitly; only changed fields are sent | PASS | A, M |
+| Unsaved-change tracking (header count, per-field "Unsaved", Discard) | PASS | M |
+| Warning before navigation with unsaved changes | PASS (in-app links, reload/close) · **not** for browser back/forward | M (dialog on sidebar link and Back to Discovery; `beforeunload` on reload); limitation N1 |
+| Unsaved edits are not silently saved | PASS | M (API value unchanged while dirty, after "Stay", after dismissing reload prompt, after "Discard and leave") |
+| `PATCH /api/brds/[id]` (Zod: known field keys only, max 4000 chars, title 1–200) | PASS | A (400/404 cases, no-op save leaves `updatedAt`) |
+| Manual edits tracked separately (`manualEdits[key] = { editedAt }`), shown as "Manually edited" | PASS | A, M |
+| `POST /api/brds/[id]/regenerate`: manual edits and other content kept, only empty fields filled from PROVIDED requirements | PASS | A (unit + DB), M (16 fields filled, 2 manual edits kept) |
+| Same BRD id, title and creation date after regeneration; still one BRD per session | PASS | A, M |
+| Status and completeness recalculated from saved content (save and regenerate) | PASS | A, M |
+| Concurrent save/regenerate do not lose edits | PASS | A (row lock; the test fails 3/3 runs with the lock removed) |
+
+### Phase 10 — PDF export
+Library: **PDFKit 0.20** (pure JavaScript, no headless browser or native dependency → suitable
+for Railway; listed in `serverExternalPackages`). Font: Geist 1.7.2 TTF (SIL OFL) vendored in
+`assets/fonts/geist/`. Visual review: pages rendered with pdf.js (Chrome) and macOS Quartz (`sips`).
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| `GET /api/brds/[id]/pdf`: 200 `application/pdf`, `attachment` with ASCII + UTF-8 file name, `no-store`; JSON 400/404 errors | PASS | A, M |
+| Valid PDF (header/trailer, parseable by pdf.js, metadata title) | PASS | A, M |
+| Generated from the saved BRD; manual edits appear (marked "Manually edited"); latest save is exported | PASS | A (two successive saves → only the second value), M (save then export) |
+| Title line, BRD title, document date (last saved, UTC), created, status, completeness, source session | PASS | A, M |
+| All seven sections with all 18 field labels | PASS | A |
+| Missing values clearly marked ("Not specified — missing information", amber) | PASS | A (count = missing fields), M (visual) |
+| Page numbers "Page n of N" on every page | PASS | A, M |
+| Multi-page flow without clipping (18 × ~3,800 chars → 20 pages; 3,000-char unbroken token wraps) | PASS | A (all end markers present; no body text in footer zone or outside the page), M (visual) |
+| Label kept with its value; section heading not stranded at page end | PASS | M (visual), S |
+| Professional typography, restrained magenta accents | PASS | M (visual review; subjective) |
+| Export PDF button (disabled while there are unsaved changes; error shown inline) | PASS | M |
+| No browser screenshots used | PASS | S (server-side PDFKit drawing) |
+| Fix introduced with the extra button: shared `PageHeader` actions now wrap instead of overflowing (`max-w-full`); editor's unsaved badge moved below the title | PASS on the BRD editor at 1024 px (M, dirty and clean) · other pages S only |
+| Works on Railway | **NV** | not deployed (deployment phase) |
+
+### Phase 11 — Settings & UX polish
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| `GET`/`PATCH /api/settings` (Zod: known role, integer delay 0–5000, at least one field, no unknown keys) | PASS | A (bounds, 400 cases incl. strings/decimals/null/unknown keys, 415) |
+| Settings persisted in PostgreSQL; survive reload | PASS | A, M |
+| Settings page: role select with descriptions, delay input with inline validation, Save Changes / Discard, unsaved-change guard, loading and error/retry states | PASS | M (loading/error states: S — error state not forced in the browser) |
+| Default role applied to new sessions (API and New Discovery preselection); explicit first-message role wins | PASS | A, M |
+| Existing sessions keep their role when the default changes | PASS | A, M |
+| Delay change applies from the next reply (also mid-session) | PASS | A, M (timed) |
+| Delay bounded below the processing-lock timeout (M3) | PASS | A (`MAX × 2 < 30 s`), DB `CHECK` 0–5000 (A) |
+| No placeholder buttons/notices remain | PASS | S (`grep` for "not yet"/"not available"/"coming soon": none), M |
+| Accessibility fixes from the axe review: warning/destructive contrast (tokens → amber-800/red-700), "Asking now" row contrast, progress panel and missing-field list keyboard-scrollable, `h1` on not-found/error/unknown-record pages, 404 page title, skip link | PASS | M (axe re-scan: 0 violations), keyboard workflow |
+| Desktop responsiveness: no horizontal overflow at 900/1024/1440 px on all pages; role label truncates with ellipsis | PASS | M |
+| Existing workflows unchanged | PASS | A (all suites), M (Phase 09 and 10 browser suites re-run) |
+
+### Phase 12 — Final verification, Docker & deployment preparation
+
+**Critical acceptance scenarios** — browser automation (Playwright, headless Chrome) through the
+real UI against the **Docker container** (Compose, PostgreSQL 17); result 24/24:
+
+| Scenario | Result | What was checked |
+| --- | --- | --- |
+| A — New session | PASS | no DB row after opening New Discovery; session + 2 messages after the first message |
+| B — XY problem | PASS | reply asks "what business problem…"; problem statement/outcome stay MISSING; stage Business Problem Validation |
+| C — Persistence | PASS | after 4 messages (17 %): reload restores all 8 messages, completeness, role, stage |
+| D — Draft BRD | PASS | warning lists 15 incomplete fields; Draft; 15 × "Not specified" |
+| E — Manual editing | PASS | edit saved, discovery continued, regenerate → edit kept, same BRD id, one BRD |
+| F — PDF | PASS | Export PDF download is a valid PDF (2 pages) containing title, discovery answer, manual edit, "Not specified" markers, page numbers |
+| G — Deletion | PASS | session, messages, requirement state and BRD rows = 0; API 404 |
+| H — Role switching | PASS | role persisted; requirements and messages unchanged |
+
+Also covered by the automated suites (A): all API endpoints (status codes, Zod validation,
+consistent errors), Mock AI engine (classification, XY validation, extraction, state machine,
+clarification/skip, corrections, roles, determinism), completeness, BRD rules, settings.
+
+**Docker** (`Dockerfile`, `.dockerignore`, `docker/entrypoint.sh`, `compose.yaml`):
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Multi-stage build, Node.js 24 LTS (`node:24.22.1-bookworm-slim`, matches `.nvmrc`) | PASS | build (M) |
+| Next.js standalone output (only in the Docker build via `NEXT_OUTPUT=standalone`) | PASS | image contains `server.js` + traced `node_modules` (51 MB) |
+| Prisma Client generated; runtime deps + migrations included | PASS | migrations ran from the image; queries work |
+| Non-root user | PASS | `id` → `uid=1000(node)` |
+| Binds `0.0.0.0`, honours `PORT`, robust against platform-set `HOSTNAME` | PASS | `PORT=8080`/`4000` runs; `HOSTNAME=some-container` still binds `0.0.0.0` |
+| `DATABASE_URL` required; no secrets/`.env` in image; no PostgreSQL in image | PASS | missing → exit 1 with message; `find` for `.env*` in image: none |
+| PDF export in the container | PASS | Compose (arm64) and amd64 image: `GET /api/brds/[id]/pdf` → 200 `application/pdf`, `%PDF-` |
+| amd64 (Railway's architecture) | PASS (emulated) | amd64 image: x86_64, `schema-engine-debian-openssl-3.0.x`, migrations on a fresh DB, session/BRD/PDF |
+| Graceful stop | PASS | `docker compose restart`/`down` in 3–4 s (SIGTERM handled) |
+| Image size | ~770 MB uncompressed | ~250 MB is the Prisma CLI needed for `migrate deploy`; accepted (N11) |
+
+**Migration strategy:** `prisma migrate deploy` in the container start command, before
+`node server.js` (`docker/entrypoint.sh`); never during the image build; no reset, no seed, no
+`db push`. Alternative documented: Railway pre-deploy command + `RUN_MIGRATIONS=false`.
+
+| Check | Status | Evidence |
+| --- | --- | --- |
+| Fresh database: all 4 migrations applied, then server starts | PASS | Compose (PostgreSQL 17) and amd64 run; settings row created by the migration |
+| Restart: `No pending migrations to apply.` | PASS | Compose down/up |
+| Server does not start when migrations cannot run | PASS | unreachable DB → `P1001`, exit 1, no "Starting server" |
+| `RUN_MIGRATIONS=false` skips; documented pre-deploy command works | PASS | M |
+| Data persistence across `restart`, `down`/`up` (volume kept) and image rebuild | PASS | session, messages, BRD manual edit, settings value, PDF after restart |
+
+Additions: `GET /api/health` (health check for Docker/Railway; DB ping) with a DB test.
+Sequence note: scenarios A–H ran on the image built before the entrypoint was changed to pin
+`HOSTNAME=0.0.0.0`; after that change the rebuilt image was re-verified for health, `PORT`/`HOSTNAME`
+handling, persistence across container replacement, and (amd64) migrations, session, BRD and PDF.
+Not executed: a real Railway deployment (by instruction), Railway's PostgreSQL version.
+
+### Specification items not yet implemented
+None in the application. Railway deployment is prepared but not performed (manual step).
+Acceptance scenarios A, B, C, D, G, H: PASS (Phase 08.5); **E**: PASS (Phase 09); **F**: PASS
+(Phase 10, A + M; locally, not on Railway).
 
 ## 4. Architecture review
 
@@ -178,10 +302,11 @@ instructions and deployment, acceptance scenarios **E** (manual edit survives re
 | Data model | `prisma/schema.prisma`, `prisma/migrations/*` (3), `prisma.config.ts` |
 | Requirement catalog & JSON schemas | `src/lib/requirements/{fields,schemas,progress}.ts` |
 | Mock AI | `src/lib/mock-ai/` — `engine.ts` (`processTurn`), `classification.ts`, `extraction.ts`, `solution-detection.ts`, `state-machine.ts`, `roles.ts`, `templates.ts`, `progress.ts`, `config/*` |
-| BRD rules | `src/lib/brd/generation.ts` |
+| BRD rules | `src/lib/brd/generation.ts` (incl. PDF file name), `src/lib/brd/editing.ts` (save/regenerate rules) |
+| PDF | `src/server/pdf/brd-pdf.ts` (PDFKit renderer), `assets/fonts/geist/` (fonts + OFL), `tests/pdf-text.ts` (pdf.js text extraction for tests) |
 | API contracts | `src/lib/api/{types,chat-schemas,client}.ts` |
 | Server services | `src/server/discovery/discovery-service.ts`, `src/server/sessions/{session-service,processing-lock,serializers}.ts`, `src/server/brds/brd-service.ts`, `src/server/db/*`, `src/server/api/http.ts`, `src/server/errors.ts` |
-| Route handlers | `src/app/api/chats/**`, `src/app/api/brds/**`, `src/app/api/settings/route.ts` |
+| Route handlers | `src/app/api/chats/**`, `src/app/api/brds/**` (incl. `PATCH [id]`, `[id]/regenerate`, `[id]/pdf`), `src/app/api/settings/route.ts` |
 | UI | `src/components/discovery/*`, `src/components/sessions/*`, `src/components/brds/*`, `src/components/layout/*`, `src/components/common/*`, `src/hooks/*` |
 | Tests | `*.test.ts` (unit), `*.db.test.ts` (PostgreSQL), `tests/db-*.ts` (setup), `vitest.config.mts` |
 
@@ -194,14 +319,22 @@ instructions and deployment, acceptance scenarios **E** (manual edit survives re
 5. **Corrections** require an explicit cue and field name; ambiguity changes nothing. Plain statements never overwrite provided fields.
 6. **Turn persistence:** per-session processing lock (atomic UPDATE, 30 s expiry) + idempotency key (unique `Message.clientRequestId`); delay runs with no transaction open; one transaction stores user message, reply, requirement state and stage.
 7. **Message order** by DB-assigned `Message.sequence` (timestamps can tie).
-8. **BRD:** content only from Provided fields (unclear values are not copied); Ready for Review = all 18 fields have content (not approval); one BRD per session enforced by unique constraint; repeated generation returns the existing BRD unchanged (regeneration is a separate operation, Phase 09).
+8. **BRD:** content only from Provided fields (unclear values are not copied); Ready for Review = all 18 fields have content (not approval); one BRD per session enforced by unique constraint; repeated generation returns the existing BRD unchanged (regeneration is a separate operation).
 9. **Next.js 16 specifics:** `connection()` in GET handlers; `unstable_rethrow` in the error wrapper; dynamic params and `usePathname` wrapped in `Suspense`; pages preserved by `<Activity>` — New Discovery keyed by `bfcacheId` and reset after handover.
 10. **Settings row** inserted by the initial migration (Railway's fixed start command cannot seed); `ensureAppSettings()` is the runtime fallback.
+11. **BRD editing (Phase 09):** a field is "manually edited" when a save changes its value (normalized: trimmed, CRLF → LF); saving an empty value stores `null` ("Not specified", counts as missing). Status/completeness are always derived from the saved content.
+12. **Regeneration (Phase 09):** literal reading of spec §6 — every non-empty field is kept (manual edits *and* earlier generated text), only empty fields are filled, and only from PROVIDED requirements. A field the user cleared is empty and may be filled again; it then becomes generated content (its `manualEdits` entry is removed). The response lists the filled fields so the editor can report them — nothing changes silently. Title, id and `createdAt` are kept. Regenerate is disabled in the UI while there are unsaved changes (it works on saved content).
+13. **BRD concurrency (Phase 09):** save and regenerate lock the BRD row with `SELECT … FOR UPDATE` in their transaction (read-modify-write of the JSON content).
+14. **PDF (Phase 10):** rendered on the server from `getBrdDetail` (saved content), never from the UI; the editor disables export while there are unsaved changes instead of exporting unsaved text. Dates are printed in UTC (server and viewer time zones differ). The "not specified" count is taken from the rendered fields. Fonts are read from `<cwd>/assets/fonts/geist`, so the server must start in the project root.
+15. **Settings (Phase 11):** one shared record; the default role is resolved when a session is created (stored per session, never re-read), the delay is read on every turn. Bounds live in `src/lib/settings/settings.ts` and are enforced by Zod and a DB `CHECK`. Settings tests restore the shared row after each test.
 
 ## 7. Corrections to earlier phase reports
 
 - **Phase 04** reported "sessions persist after restart". That check was invalid: an orphaned server kept serving after `pkill`. Persistence across a real restart was verified in Phase 06 (different PID).
 - **Browser test scripts** used in Phases 06–08 began with `delete from "ChatSession"` on the local throwaway `dora_dev` database. This audit ran them only against a newly created `dora_audit` database.
+- **Phase 11 follow-up (2026-10-24, reported during manual testing):**
+  - *Page scrolled below the chat input.* Cause (present since Phase 07): the progress panel's `sr-only` status labels are `position: absolute`; with no positioned ancestor they were laid out against the page, not clipped by the panel's scroll area, and stretched the document by ~440 px. Phase 11's overflow audit checked horizontal overflow only. Fix: the app frame (`app-shell.tsx`) and the chat/progress scroll areas are `relative`. Verified (M, 32 checks): the document is exactly the viewport height on all pages at 1280×800, 1024×700 and 1440×900, the chat page ends at the composer, the progress panel still scrolls, skip link and axe unchanged.
+  - *`pg` deprecation warning (L3).* Cause isolated with probes: Prisma 7's query interpreter loads the relations of a multi-relation `select` concurrently when it runs inside an interactive transaction, on the single transaction connection. Only `createSessionFromFirstTurn` did that (detail read inside its transaction). Fix: the detail is read after the commit. Verified (A): full DB suite (78/78) and a production-server run emit no deprecation warning.
 
 ## 8. Known issues (by severity)
 
@@ -209,49 +342,66 @@ instructions and deployment, acceptance scenarios **E** (manual edit survives re
 None found.
 
 ### High
-- **H1 — Nothing is committed.** All work since the initial commit is untracked; no history, no rollback, risk of loss (aggravated by H2). *Action:* commit the baseline before Phase 09.
-- **H2 — Folder sync creates conflict copies.** 386 `* 2.*` duplicates appeared in `.next/` (twice); they break `npm run typecheck` in the working tree. The project is under `~/Documents`, consistent with iCloud Desktop & Documents sync; the same could hit source files or `node_modules`. *Action:* move the repository out of the synced folder (or exclude it), then delete `.next/`.
-- **H3 — Prisma CLI is a devDependency but needed at runtime.** `npm start` runs `prisma migrate deploy`, and `postinstall` runs `prisma generate`. If the Railway build prunes or omits dev dependencies, start-up fails. NV on Railway. *Action (deployment phase):* move `prisma` to `dependencies` or verify the Railway install mode.
+- **H1 — RESOLVED.** Baseline committed (`1bdd255`). Keep pushing to `origin`: the repository is inside iCloud, so the remote is the reliable backup.
+- **H2 — MITIGATED.** iCloud Desktop & Documents sync (`~/Documents`) creates conflict copies (`* 2.*`) of frequently rewritten files. The project stays in iCloud. Build output moved to `.next.nosync/` (`distDir`; iCloud skips names ending in `.nosync`) — no copies since. `src/generated/prisma/` (regenerated on every build/install) still receives copies; they are not imported and do not break checks, and are removed manually: `find . -path ./node_modules -prune -o -name '* 2*' -type f -print -delete`. `.git/`, `node_modules/` and `src/` (own code) showed no copies.
+- **H3 — RESOLVED for the Docker deployment (Phase 12).** The image ships its own Prisma CLI (migrator stage). Still applies only to non-Docker deployments that prune dev dependencies. Original: **Prisma CLI is a devDependency but needed at runtime.** `npm start` runs `prisma migrate deploy`, and `postinstall` runs `prisma generate`. If the Railway build prunes or omits dev dependencies, start-up fails. NV on Railway. *Action (deployment phase):* move `prisma` to `dependencies` or verify the Railway install mode.
 
 ### Medium
-- **M1 — No Railway deployment instructions** in the README (spec §2/§11 deliverable); deployment never tested.
+- **M1 — RESOLVED (Phase 12).** `RAILWAY_DEPLOYMENT.md`. Deployment itself NV. Original: **No Railway deployment instructions** in the README (spec §2/§11 deliverable); deployment never tested.
 - **M2 — UI workflows have no repeatable automated tests in the repository.** The 80 browser checks are ad-hoc scripts outside the repo; API/engine coverage is in Vitest.
-- **M3 — Simulated delay has no upper bound** (DB CHECK only `>= 0`; editing not yet possible). A delay ≥ the 30 s lock timeout would let a concurrent request take over the lock; the first turn would then be rejected (no corruption, but a lost/failed send). *Action (settings phase):* bound the delay well below `PROCESSING_LOCK_TIMEOUT_MS`.
+- **M3 — RESOLVED (Phase 11).** Delay bounded to 0–5000 ms (Zod + DB `CHECK`). Original issue: **Simulated delay has no upper bound** (DB CHECK only `>= 0`; editing not yet possible). A delay ≥ the 30 s lock timeout would let a concurrent request take over the lock; the first turn would then be rejected (no corruption, but a lost/failed send). *Action (settings phase):* bound the delay well below `PROCESSING_LOCK_TIMEOUT_MS`.
 
 ### Low
 - **L1 — Failed turns that acquired the lock bump `ChatSession.updatedAt`** (Prisma `@updatedAt` on `updateMany`), moving the session to the top of the sidebar. Verified (M).
 - **L2 — Corrupted requirement JSON makes the session unviewable** (`GET /api/chats/[id]` → 500) rather than degrading gracefully. Verified (M). Only reachable by direct DB manipulation.
-- **L3 — `pg` deprecation warning** ("client.query() while already executing") from Prisma's query interpreter in the first-message transaction; would break with `pg@9`. Locked at `pg@8.23.1`.
+- **L3 — RESOLVED (2026-10-24, §7).** `pg` deprecation warning ("client.query() while already executing") came from a multi-relation read inside the first-message transaction; that read now runs after the commit.
 - **L4 — `BrdDetail.missingFields[].status` is always `MISSING`** (the BRD does not store original field statuses); the type suggests otherwise.
 - **L5 — No cross-tab refresh:** sidebar lists and Activity-preserved pages can show stale data after changes in another tab.
 - **L6 — Length-based fallback acceptance:** for fields that allow it, any sufficiently long answer is recorded even if it addresses another topic (inherent to keyword rules; documented).
 - **L7 — Role change applies from the next reply;** the already-shown question keeps the old wording; the role-change notice is not persisted.
 - **L8 — No pagination** for session and BRD lists.
-- **L9 — PostgreSQL 14 used locally;** Railway's version not tested.
+- **L9 — MITIGATED (Phase 12).** DB suite and container verified on PostgreSQL 14 and 17; Railway's actual version NV.
+
+- **N1 (Phase 09) — Browser back/forward is not intercepted** by the unsaved-changes warning (the App Router offers no cancellable navigation event). The page stays hidden in Activity and shows the unsaved edits on return, but Next.js keeps only 3 routes; if the page is evicted the edits are lost. In-app links and reload/close are guarded. Verified (M) for links and reload only.
+- **N2 (Phase 09) — Regeneration never refreshes non-empty generated fields.** If a requirement is corrected in the chat after the BRD was generated, the BRD keeps the old text; the user must clear the field (or edit it) and regenerate. This follows spec §6 literally ("fill only empty fields").
+- **N3 (Phase 09) — No conflict detection between two editor tabs.** Saves send only changed fields, so different fields merge; the same field edited in two tabs is last-write-wins. A regeneration in another tab shows up after reload, or after returning to the page (refetch on reveal when there are no unsaved edits — S only, not separately tested).
+
+- **N4 (Phase 10) — Characters missing from the Geist font** (e.g. emoji, ✓, most Greek letters) appear as empty boxes in the PDF. Latin (incl. extended), Cyrillic and common punctuation/symbols are covered. Verified (M, pdf.js rendering).
+- **N5 (Phase 10) — PDF rendering runs in the request** (not timed separately; in the unit tests a 20-page document renders and is parsed again in about 0.3 s); no caching, no size limit beyond the 18 × 4,000-character field limit. Acceptable for the demo; not load-tested.
+- **N6 (Phase 10) — Font path depends on the working directory** (`process.cwd()/assets/fonts/geist`). Satisfied by `npm start` in the project root and by the Docker image (working directory `/app`, fonts traced into the standalone output; PDF verified in the container). On Railway NV.
+- **N7 (Phase 10) — The PDF is not tagged (PDF/UA)**; it has a document title, language `en` and section bookmarks, but no structure tree for screen readers.
+
+- **N8 (Phase 11) — Settings are global** for all users of the demo (spec §7: single shared record); there is no per-user preference (no accounts, out of scope).
+- **N9 (Phase 11) — Radix popups mark the page `aria-hidden`** while open (axe `aria-hidden-focus`); focus is trapped in the popup (verified), so the hidden controls are not reachable. Standard shadcn/Radix behaviour, accepted.
+- **N10 (Phase 11) — Accessibility is verified with axe-core and keyboard checks only**, not with a screen reader.
+
+- **N11 (Phase 12) — Image size ~770 MB** (uncompressed), mostly the Prisma CLI kept for `migrate deploy` at start. Could be reduced by running migrations from a separate image/job.
+- **N12 (Phase 12) — Migrations run on every container start.** Correct for one instance; with several replicas use the documented pre-deploy command so they run once.
 
 ### Technical debt
 - Ad-hoc browser scripts (M2) should become a maintained E2E suite if UI regression coverage is wanted.
 - `FIELD_LABELS` is derived in two places (`lib/mock-ai/templates.ts`, `lib/brd/generation.ts`).
 - The integration tests stub `next/server` `connection()` and the delay module; route handlers are not exercised through a real Next.js server in automated tests.
 
-## 9. Readiness for Phase 09 (BRD editor & regeneration)
+## 9. Deployment readiness
 
-**READY FOR PHASE 09 — no application-code fixes required first.** Before starting, resolve the
-two non-code items **H1** (commit the baseline) and **H2** (move the repo out of the synced folder
-and delete `.next/`), because H2 currently breaks `npm run typecheck` in the working tree.
+**READY FOR MANUAL RAILWAY DEPLOYMENT — not deployed.** The Docker image builds for amd64 and
+arm64, applies migrations before serving, runs as non-root on `0.0.0.0:$PORT`, and passed the
+acceptance scenarios A–H in a container against PostgreSQL 17. Remaining unverified items can
+only be checked on Railway: build on Railway's builders, the reference variable
+`${{Postgres.DATABASE_URL}}` over the private network, the domain's target port, Railway's
+PostgreSQL version, and PDF export there (N6: the container's working directory is `/app`, where
+`assets/fonts` is included by the build — verified locally).
 
-Phase 09 can build on existing structures without restructuring:
-`BusinessRequirementsDocument.content` + `manualEdits` (Zod schemas exist), `buildBrdSections`
-(already reports `manuallyEdited`), pure generation rules in `lib/brd`, and the BRD service.
-Points to decide in Phase 09: regeneration fills only empty fields (spec §6) — generated,
-non-empty fields are therefore also kept; saving an empty field should store `null` and count as
-missing; status/completeness must be recalculated from saved content.
+Local environment note: the `dora_dev`/`dora_test`/`dora_audit` databases used in earlier phases
+were not present on the local PostgreSQL 14 instance at the start of Phase 09. Phase 09 created
+`dora_test` and `dora_phase09` (left empty). Phase 12 used the Compose volume `dora_dora-db`
+(left with an empty application database: no sessions, default settings).
 
 ## 10. Recommended next actions
 
-1. Commit the current baseline (H1).
-2. Move the repository out of `~/Documents` (or exclude it from sync), delete `.next/`, re-run `npm run check` (H2).
-3. Proceed with Phase 09.
-4. In the settings phase: bound `mockResponseDelayMs` (M3).
-5. In the deployment phase: resolve H3, write Railway instructions (M1), deploy and verify on Railway's PostgreSQL (L9).
-6. Optionally: turn the browser checks into a maintained E2E suite (M2).
+1. Commit Phases 09–12 (incl. `assets/`, `docker/`, `Dockerfile`, `compose.yaml`, the fourth
+   migration) and push to GitHub.
+2. Deploy manually following `RAILWAY_DEPLOYMENT.md`; afterwards record the Railway results
+   here (startup logs, migration logs, smoke test, PostgreSQL version).
+3. Optionally: turn the browser checks into a maintained E2E suite (M2).

@@ -1,15 +1,23 @@
 import { connection } from "next/server";
 
+import { updateSettingsRequestSchema } from "@/lib/api/settings-schemas";
 import type { SettingsResponse } from "@/lib/api/types";
-import { withErrorHandling } from "@/server/api/http";
-import { ensureAppSettings } from "@/server/db/settings";
+import { parseJsonBody, withErrorHandling } from "@/server/api/http";
+import { ensureAppSettings, toSettingsDto, updateAppSettings } from "@/server/db/settings";
 
-/** The shared settings record (read-only here; editing is part of the Settings feature). */
+/** The shared settings record: default assistant role and simulated response delay. */
 export const GET = withErrorHandling(async () => {
   await connection();
-  const settings = await ensureAppSettings();
-  const body: SettingsResponse = {
-    settings: { defaultAssistantRole: settings.defaultAssistantRole, mockResponseDelayMs: settings.mockResponseDelayMs },
-  };
+  const body: SettingsResponse = { settings: toSettingsDto(await ensureAppSettings()) };
+  return Response.json(body);
+});
+
+/**
+ * Updates the settings: `{ defaultAssistantRole?, mockResponseDelayMs? }` (delay 0–5000 ms).
+ * Existing sessions keep their role; the delay applies from the next DORA response.
+ */
+export const PATCH = withErrorHandling(async (request: Request) => {
+  const update = await parseJsonBody(request, updateSettingsRequestSchema);
+  const body: SettingsResponse = { settings: toSettingsDto(await updateAppSettings(update)) };
   return Response.json(body);
 });

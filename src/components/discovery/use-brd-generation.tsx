@@ -92,11 +92,16 @@ export function useBrdGeneration({ sessionId, missing, onGenerated }: Options) {
             or generate a draft BRD now — incomplete fields will be shown as “Not specified”.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <ul className="max-h-60 space-y-1 overflow-y-auto rounded-lg border bg-muted/40 p-3 text-sm" aria-label="Incomplete fields">
+        {/* Focusable so the list can be scrolled with the keyboard. */}
+        <ul
+          tabIndex={0}
+          className="max-h-60 space-y-1 overflow-y-auto rounded-lg border bg-muted/40 p-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          aria-label="Incomplete fields"
+        >
           {warning?.map((field) => (
             <li key={field.key} className="flex items-baseline justify-between gap-3">
               <span>{field.label}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">{STATUS_TEXT[field.status]}</span>
+              <span className="shrink-0 text-xs text-foreground/70">{STATUS_TEXT[field.status]}</span>
             </li>
           ))}
         </ul>

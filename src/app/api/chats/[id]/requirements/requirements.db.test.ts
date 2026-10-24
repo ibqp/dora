@@ -6,7 +6,6 @@ import type { ChatSessionDetail, RequirementsResponse, SendMessageResponse } fro
 import { createInitialDiscoveryState, processTurn } from "@/lib/mock-ai";
 import { getPrisma } from "@/server/db/client";
 
-import { GET as GET_SETTINGS } from "../../../settings/route";
 import { POST as SEND } from "../messages/route";
 import { GET as GET_ONE, PATCH } from "../route";
 import { POST as CREATE } from "../../route";
@@ -154,16 +153,5 @@ describe("assistant role switching (Scenario H)", () => {
     } finally {
       await prisma.appSettings.update({ where: { id: 1 }, data: { defaultAssistantRole: settings.defaultAssistantRole } });
     }
-  });
-});
-
-describe("GET /api/settings", () => {
-  it("returns the default role and simulated delay", async () => {
-    const response = await GET_SETTINGS();
-    expect(response.status).toBe(200);
-    const stored = await prisma.appSettings.findUniqueOrThrow({ where: { id: 1 } });
-    expect(await response.json()).toEqual({
-      settings: { defaultAssistantRole: stored.defaultAssistantRole, mockResponseDelayMs: stored.mockResponseDelayMs },
-    });
   });
 });

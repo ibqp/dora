@@ -19,6 +19,8 @@ import type { BrdContent, BrdManualEdits, RequirementFields } from "@/lib/requir
 
 export const NOT_SPECIFIED = "Not specified";
 export const MAX_BRD_TITLE_LENGTH = 200;
+/** Upper bound for one manually edited field. */
+export const MAX_BRD_FIELD_LENGTH = 4000;
 
 export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   DRAFT: "Draft",
@@ -59,6 +61,22 @@ export function determineBrdStatus(content: BrdContent): DocumentStatus {
 export function buildBrdTitle(sessionTitle: string): string {
   const title = `BRD: ${sessionTitle.trim() || "Discovery session"}`;
   return title.length <= MAX_BRD_TITLE_LENGTH ? title : `${title.slice(0, MAX_BRD_TITLE_LENGTH - 1).trimEnd()}…`;
+}
+
+const MAX_PDF_FILE_NAME_LENGTH = 100;
+
+/**
+ * Download file name for a BRD's PDF, derived from its title: "BRD Churn analysis.pdf".
+ * Characters that are unsafe in file names are removed; letters of any script are kept.
+ */
+export function buildBrdPdfFileName(title: string): string {
+  const base = title
+    .replace(/[^\p{L}\p{N} ._-]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_PDF_FILE_NAME_LENGTH)
+    .replace(/^[\s.]+|[\s.]+$/g, "");
+  return `${base || "BRD"}.pdf`;
 }
 
 export interface MissingRequirement {

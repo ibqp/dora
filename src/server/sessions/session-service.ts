@@ -163,7 +163,7 @@ export async function createSessionFromFirstTurn(
   turn: UserTurn & { title: string; assistantRole: AssistantRole },
   db: PrismaClient = getPrisma(),
 ): Promise<ChatSessionDetail> {
-  return db.$transaction(async (tx) => {
+  const sessionId = await db.$transaction(async (tx) => {
     const session = await tx.chatSession.create({
       data: {
         title: turn.title,
@@ -175,8 +175,12 @@ export async function createSessionFromFirstTurn(
       select: { id: true },
     });
     await createMessages(tx, session.id, turnMessages(turn));
-    return getSessionDetail(session.id, tx);
+    return session.id;
   });
+  // Read after commit: inside an interactive transaction, Prisma's query interpreter loads the
+  // several relations of the detail view concurrently over the single transaction connection,
+  // which pg deprecates (removed in pg@9). Outside the transaction each query gets its own turn.
+  return getSessionDetail(sessionId, db);
 }
 
 /**

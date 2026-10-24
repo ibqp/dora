@@ -15,6 +15,7 @@ export default function AppError({ error, retry }: { error: unknown; retry: () =
   return (
     <PageContent width="narrow">
       <EmptyState
+        headingLevel="h1"
         icon={TriangleAlert}
         title="Something went wrong"
         description="This page could not be displayed. Try again, or use the navigation to continue."

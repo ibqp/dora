@@ -2,6 +2,8 @@
 import { z } from "zod";
 
 import { AssistantRole } from "@/generated/prisma/enums";
+import { MAX_BRD_FIELD_LENGTH, MAX_BRD_TITLE_LENGTH } from "@/lib/brd/generation";
+import { requirementFieldKeySchema } from "@/lib/requirements/schemas";
 import { MAX_SESSION_TITLE_LENGTH, normalizeWhitespace } from "@/lib/sessions/title";
 
 export const MAX_MESSAGE_LENGTH = 4000;
@@ -19,6 +21,38 @@ export const generateBrdRequestSchema = z
     allowIncomplete: z.boolean().default(false),
   })
   .strict();
+
+const brdTitleSchema = z
+  .string()
+  .transform(normalizeWhitespace)
+  .pipe(
+    z
+      .string()
+      .min(1, "Title must not be empty")
+      .max(MAX_BRD_TITLE_LENGTH, `Title must be at most ${MAX_BRD_TITLE_LENGTH} characters`),
+  );
+
+/** A field value as typed in the editor; empty text (or null) clears the field ("Not specified"). */
+const brdFieldValueSchema = z
+  .string()
+  .max(MAX_BRD_FIELD_LENGTH, `A field must be at most ${MAX_BRD_FIELD_LENGTH} characters`)
+  .nullable();
+
+/**
+ * PATCH /api/brds/[id] — saves manual edits. Only the fields sent are changed; unknown field
+ * keys are rejected.
+ */
+export const updateBrdRequestSchema = z
+  .object({
+    title: brdTitleSchema.optional(),
+    content: z.partialRecord(requirementFieldKeySchema, brdFieldValueSchema).optional(),
+  })
+  .strict()
+  .refine((body) => body.title !== undefined || Object.keys(body.content ?? {}).length > 0, {
+    message: "Provide a title or at least one content field",
+  });
+
+export type UpdateBrdRequest = z.infer<typeof updateBrdRequestSchema>;
 
 export const messageContentSchema = z
   .string()

@@ -1,6 +1,8 @@
 /** Persistence for Business Requirements Documents (exactly one per discovery session). */
 import type { Prisma } from "@/generated/prisma/client";
-import type { BrdDetail, BrdSummary } from "@/lib/api/types";
+import type { UpdateBrdRequest } from "@/lib/api/chat-schemas";
+import type { BrdDetail, BrdSummary, RegenerateBrdResponse } from "@/lib/api/types";
+import { applyBrdEdits, regenerateBrdContent } from "@/lib/brd/editing";
 import {
   buildBrdSections,
   buildBrdTitle,
@@ -10,7 +12,13 @@ import {
   listMissingRequirements,
 } from "@/lib/brd/generation";
 import { FieldStatus, REQUIREMENT_FIELDS } from "@/lib/requirements/fields";
-import { brdContentSchema, brdManualEditsSchema, requirementFieldsSchema } from "@/lib/requirements/schemas";
+import {
+  brdContentSchema,
+  brdManualEditsSchema,
+  requirementFieldsSchema,
+  type BrdContent,
+  type BrdManualEdits,
+} from "@/lib/requirements/schemas";
 import { getPrisma, type DbClient, type PrismaClient } from "@/server/db/client";
 import { hasPrismaErrorCode, PrismaErrorCode } from "@/server/db/errors";
 import { DataIntegrityError, IncompleteRequirementsError, NotFoundError } from "@/server/errors";
@@ -48,16 +56,21 @@ function toBrdSummary(row: BrdSummaryRow): BrdSummary {
   };
 }
 
-function toBrdDetail(row: BrdDetailRow): BrdDetail {
+function parseStoredBrd(row: BrdDetailRow): { content: BrdContent; manualEdits: BrdManualEdits } {
   const content = brdContentSchema.safeParse(row.content);
   const manualEdits = brdManualEditsSchema.safeParse(row.manualEdits);
   if (!content.success || !manualEdits.success) {
     throw new DataIntegrityError(`Stored content of BRD ${row.id} is invalid`);
   }
+  return { content: content.data, manualEdits: manualEdits.data };
+}
+
+function toBrdDetail(row: BrdDetailRow): BrdDetail {
+  const { content, manualEdits } = parseStoredBrd(row);
   return {
     ...toBrdSummary(row),
-    sections: buildBrdSections(content.data, manualEdits.data),
-    missingFields: REQUIREMENT_FIELDS.filter((field) => content.data[field.key] === null).map((field) => ({
+    sections: buildBrdSections(content, manualEdits),
+    missingFields: REQUIREMENT_FIELDS.filter((field) => content[field.key] === null).map((field) => ({
       key: field.key,
       label: field.label,
       status: FieldStatus.MISSING,
@@ -134,4 +147,86 @@ export async function generateBrdForSession(
     if (hasPrismaErrorCode(error, PrismaErrorCode.ForeignKeyViolation)) throw new NotFoundError("Session");
     throw error;
   }
+}
+
+/**
+ * Loads a BRD and locks its row until the transaction ends, so that concurrent saves and
+ * regenerations are applied one after another instead of overwriting each other.
+ */
+async function lockBrd(tx: DbClient, brdId: string): Promise<BrdDetailRow> {
+  const locked = await tx.$queryRaw<{ id: string }[]>`
+    SELECT "id" FROM "BusinessRequirementsDocument" WHERE "id" = ${brdId} FOR UPDATE`;
+  if (locked.length === 0) throw new NotFoundError("BRD");
+  return tx.businessRequirementsDocument.findUniqueOrThrow({ where: { id: brdId }, select: brdDetailSelect });
+}
+
+/** Content-derived fields stored with the BRD: status and completeness of the effective content. */
+function contentData(content: BrdContent, manualEdits: BrdManualEdits) {
+  return {
+    content,
+    manualEdits,
+    status: determineBrdStatus(content),
+    completenessPercentage: calculateBrdCompleteness(content),
+  };
+}
+
+/**
+ * Saves manual edits. Fields whose value changes are marked as manually edited; cleared fields
+ * are stored as null. Status and completeness are recalculated from the saved content. A save
+ * without any effective change leaves the BRD (including `updatedAt`) untouched.
+ */
+export async function updateBrd(
+  brdId: string,
+  update: UpdateBrdRequest,
+  db: PrismaClient = getPrisma(),
+  now: Date = new Date(),
+): Promise<BrdDetail> {
+  return db.$transaction(async (tx) => {
+    const row = await lockBrd(tx, brdId);
+    const stored = parseStoredBrd(row);
+    const edited = applyBrdEdits(stored.content, stored.manualEdits, update.content ?? {}, now);
+    const titleChanged = update.title !== undefined && update.title !== row.title;
+    if (edited.changedFields.length === 0 && !titleChanged) return toBrdDetail(row);
+
+    const updated = await tx.businessRequirementsDocument.update({
+      where: { id: brdId },
+      data: {
+        ...(titleChanged ? { title: update.title } : {}),
+        ...contentData(edited.content, edited.manualEdits),
+      },
+      select: brdDetailSelect,
+    });
+    return toBrdDetail(updated);
+  });
+}
+
+/**
+ * Regenerates the BRD from the session's latest structured requirements. The BRD keeps its
+ * identity and title; fields with content (manual edits included) are preserved and only empty
+ * fields are filled. Status and completeness are recalculated from the resulting content.
+ */
+export async function regenerateBrd(brdId: string, db: PrismaClient = getPrisma()): Promise<RegenerateBrdResponse> {
+  return db.$transaction(async (tx) => {
+    const row = await lockBrd(tx, brdId);
+    const stored = parseStoredBrd(row);
+    const state = await tx.requirementState.findUnique({ where: { sessionId: row.sessionId }, select: { fields: true } });
+    const fields = requirementFieldsSchema.safeParse(state?.fields);
+    if (!fields.success) throw new DataIntegrityError(`Stored requirement state of session ${row.sessionId} is invalid`);
+
+    const regenerated = regenerateBrdContent(stored.content, stored.manualEdits, fields.data);
+    const data = contentData(regenerated.content, regenerated.manualEdits);
+    const unchanged =
+      regenerated.changedFields.length === 0 &&
+      data.status === row.status &&
+      data.completenessPercentage === row.completenessPercentage;
+    const result = unchanged
+      ? row
+      : await tx.businessRequirementsDocument.update({ where: { id: brdId }, data, select: brdDetailSelect });
+
+    const labels = new Map(REQUIREMENT_FIELDS.map((field) => [field.key, field.label]));
+    return {
+      brd: toBrdDetail(result),
+      filledFields: regenerated.changedFields.map((key) => ({ key, label: labels.get(key) ?? key })),
+    };
+  });
 }

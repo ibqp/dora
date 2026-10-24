@@ -25,7 +25,12 @@ export function ProgressPanel({ progress, onClose }: ProgressPanelProps) {
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4">
+      {/* Focusable so the panel can be scrolled with the keyboard; `relative` keeps the
+          `sr-only` status labels inside the scroll area. */}
+      <div
+        tabIndex={0}
+        className="relative min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+      >
         <section aria-labelledby="completeness-heading">
           <div className="flex items-baseline justify-between">
             <h3 id="completeness-heading" className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -122,7 +127,12 @@ function FieldItem({ field }: { field: RequirementFieldProgress }) {
     >
       <Icon className={cn("mt-0.5 size-3.5 shrink-0", display.className)} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className={cn("text-xs", field.status === FieldStatus.PROVIDED ? "text-foreground" : "text-muted-foreground")}>
+        <p
+          className={cn(
+            "text-xs",
+            field.status === FieldStatus.PROVIDED || field.isCurrent ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
           {field.label}
           <span className="sr-only">: {display.label}</span>
           {field.isCurrent ? (
@@ -131,7 +141,11 @@ function FieldItem({ field }: { field: RequirementFieldProgress }) {
             </span>
           ) : null}
         </p>
-        {field.value ? <p className="truncate text-[11px] text-muted-foreground">{field.value}</p> : null}
+        {field.value ? (
+          <p className={cn("truncate text-[11px]", field.isCurrent ? "text-foreground/75" : "text-muted-foreground")}>
+            {field.value}
+          </p>
+        ) : null}
       </div>
     </li>
   );

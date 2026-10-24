@@ -8,6 +8,7 @@ import type {
 } from "@/generated/prisma/enums";
 import type { BrdSectionView, MissingRequirement } from "@/lib/brd/generation";
 import type { RequirementsProgress } from "@/lib/mock-ai/progress";
+import type { RequirementFieldKey } from "@/lib/requirements/fields";
 
 export type { RequirementFieldProgress, RequirementSectionProgress, RequirementsProgress, StageProgress } from "@/lib/mock-ai/progress";
 
@@ -79,6 +80,13 @@ export interface BrdResponse {
   brd: BrdDetail;
 }
 
+/** POST /api/brds/[id]/regenerate: the same BRD with empty fields filled where possible. */
+export interface RegenerateBrdResponse {
+  brd: BrdDetail;
+  /** Previously empty fields filled from the latest requirements, in document order. */
+  filledFields: { key: RequirementFieldKey; label: string }[];
+}
+
 export interface ListChatsResponse {
   sessions: ChatSessionSummary[];
 }
@@ -105,12 +113,18 @@ export interface RequirementsResponse {
   requirements: RequirementsProgress;
 }
 
-/** GET /api/settings */
+/** The shared demo settings. */
+export interface SettingsDto {
+  /** Role of sessions created from now on; existing sessions keep their own role. */
+  defaultAssistantRole: AssistantRole;
+  /** Simulated "DORA is typing" delay before each reply. */
+  mockResponseDelayMs: number;
+  updatedAt: string;
+}
+
+/** GET and PATCH /api/settings */
 export interface SettingsResponse {
-  settings: {
-    defaultAssistantRole: AssistantRole;
-    mockResponseDelayMs: number;
-  };
+  settings: SettingsDto;
 }
 
 export type ApiErrorCode =
