@@ -123,6 +123,7 @@ docker exec dora-postgres createdb -U dora dora_test
 | `npm run db:generate` | Regenerate the Prisma client |
 | `npm run db:validate` | Validate `prisma/schema.prisma` |
 | `npm run db:studio` | Open Prisma Studio |
+| `bash scripts/clean-project.sh` | Safe cleanup of local artefacts (build output, caches, logs, `.DS_Store`, identical iCloud conflict copies). Dry run by default; `--apply` deletes; `--deep` adds `node_modules` and the generated Prisma client (restore with `npm ci`). Never touches source, migrations, tests, assets, docs, `.env`, Docker volumes or Git |
 
 ## Environment variables
 

@@ -1,6 +1,6 @@
 # DORA — Implementation Status
 
-**Last update:** 2026-10-24 · Phase 12 (final verification, Docker, deployment preparation) · previous audit: Phase 08.5
+**Last update:** 2026-10-24 · Phase 13 (safe project cleanup) · previous audit: Phase 08.5
 **Source of truth:** [`MASTER_SPEC.md`](MASTER_SPEC.md) · Setup and API reference: [`README.md`](README.md)
 
 ## 1. Overview
@@ -24,6 +24,7 @@ Router, Cache Components), TypeScript strict, Tailwind v4 + shadcn/ui, PostgreSQ
 | 10 | PDF export | **Complete** (§3, Phase 10; Railway runtime not verified) |
 | 11 | Settings & UX polish | **Complete** (§3, Phase 11) |
 | 12 | Final verification, Docker, deployment preparation | **Complete** (§3, Phase 12) — **not deployed**: Railway deployment is a manual step ([`RAILWAY_DEPLOYMENT.md`](RAILWAY_DEPLOYMENT.md)) |
+| 13 | Safe project cleanup | **Complete** (§3, Phase 13) |
 
 > **Repository state:** last commit `1bdd255 Phase 08.5`; Phases 09–12 are **uncommitted** in the
 > working tree. Railway builds from GitHub, so everything (incl. `assets/`, `docker/`, the fourth
@@ -273,6 +274,19 @@ Sequence note: scenarios A–H ran on the image built before the entrypoint was 
 `HOSTNAME=0.0.0.0`; after that change the rebuilt image was re-verified for health, `PORT`/`HOSTNAME`
 handling, persistence across container replacement, and (amd64) migrations, session, BRD and PDF.
 Not executed: a real Railway deployment (by instruction), Railway's PostgreSQL version.
+
+### Phase 13 — Safe project cleanup
+
+| Item | Result | Evidence |
+| --- | --- | --- |
+| Audit (before) | Working tree clean at `3d063c4 Phase 12` (168 tracked files); no build output, caches, logs, `.DS_Store` or conflict copies present (`node_modules`, `.next.nosync` already removed by an earlier run of the owner's script); ignored generated files: `src/generated/prisma`, `next-env.d.ts`; no tracked secrets (only `.env.example`) | M (`git status`, `git status --ignored`, `find`) |
+| `scripts/clean-project.sh` | Dry run default, `--apply`, separate `--deep`; skips anything containing Git-tracked files; protects `.env*`, `prisma/`, `assets/`, `tests/`, `docker/`, `public/`, docs; removes iCloud conflict copies only when identical to the original (or in generated code), reports others; never runs docker/git write commands | M (sandbox clone with planted artefacts: tracked files, `.env`/`.env.local`, differing conflict copy, tracked file in `coverage/` all preserved; `--deep` and argument errors) |
+| Cleanup run | `--apply` removed 0 items (nothing disposable present) | M |
+| `.gitignore` / `.dockerignore` | added conflict copies, `*.log`, tool caches, test reports, `Thumbs.db`, `*.key` (+ `build`, `.vercel`, nested `.DS_Store` in `.dockerignore`); no tracked file newly ignored; Docker context (19 kB) contains `src/`, `prisma/` (incl. migrations), `assets/`, `docker/`, configs — no `.env`, `node_modules`, generated code | M (`git ls-files -ci`, context listing) |
+| Verification after cleanup | `npm ci`; check 0 errors; unit 176/176; DB 79/79 (PostgreSQL 14); `prisma validate`; build; `docker build`; Compose start (healthy, no pending migrations), session → draft BRD → PDF 200; pages 200 | A, M |
+
+Docker image `dora:local` and volume `dora_dora-db` were kept (the local Compose database holds one
+session not created by these checks; untouched).
 
 ### Specification items not yet implemented
 None in the application. Railway deployment is prepared but not performed (manual step).

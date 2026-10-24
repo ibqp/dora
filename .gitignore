@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/test-results
+/playwright-report
 
 # next.js (build output dir is ".next.nosync" so iCloud does not sync it)
 /.next/
@@ -23,13 +25,25 @@
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+*.key
 
-# debug
+# iCloud conflict copies ("file 2.ts") — never commit them (see CLAUDE.md)
+* 2
+* 2.*
+
+# debug / logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+
+# local tool caches
+.cache/
+.turbo/
+.eslintcache
 
 # env files — secrets stay local; only the template is committed
 .env*

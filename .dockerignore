@@ -1,31 +1,48 @@
 # Keep the build context small and free of secrets and local artefacts.
 
+# Required in the context (do not exclude): package*.json, prisma.config.ts, prisma/ (schema +
+# migrations), src/, assets/ (PDF fonts), public/, docker/entrypoint.sh, next.config.ts,
+# tsconfig.json (Tailwind v4 is configured in src/app/globals.css and next.config.ts).
+
 # Secrets / local configuration (never baked into the image)
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 
-# Dependencies and generated output (rebuilt inside the image)
+# Dependencies and generated output (rebuilt inside the image; src/generated is recreated by
+# `prisma generate`, .next.nosync is the local distDir)
 node_modules
 .next
 .next.nosync
 out
-coverage
+build
 src/generated
-tsconfig.tsbuildinfo
+*.tsbuildinfo
 next-env.d.ts
+
+# Tests output, caches, logs
+coverage
+test-results
+playwright-report
+.cache
+.turbo
+.eslintcache
+*.log
 
 # iCloud conflict copies ("file 2.ts")
 **/* 2
 **/* 2.*
 
-# VCS, editors, OS
+# VCS, editors, OS, hosting tools
 .git
 .gitignore
 .vscode
 .idea
-.DS_Store
-*.log
+.vercel
+**/.DS_Store
+**/Thumbs.db
 
 # Docker files themselves
 Dockerfile
