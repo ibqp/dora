@@ -83,11 +83,3 @@ export const SCENARIO_LABELS: Record<Scenario, string> = {
   NETWORK_PERFORMANCE: "Network Performance / Quality",
   GENERIC_ANALYTICS: "Generic Analytics Request",
 };
-
-/** Short subject used inside question templates. */
-export const SCENARIO_SUBJECTS: Record<Scenario, string> = {
-  CUSTOMER_CHURN: "customer churn",
-  SALES_PERFORMANCE: "sales performance",
-  NETWORK_PERFORMANCE: "network performance",
-  GENERIC_ANALYTICS: "this analytics request",
-};

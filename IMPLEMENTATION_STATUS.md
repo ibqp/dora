@@ -1,6 +1,6 @@
 # DORA — Implementation Status
 
-**Last update:** 2026-10-24 · Phase 13 (safe project cleanup) · previous audit: Phase 08.5
+**Last update:** 2026-10-24 · Final phase (repository cleanup) · previous audits: Phase 14 (security & health), Phase 08.5
 **Source of truth:** [`MASTER_SPEC.md`](MASTER_SPEC.md) · Setup and API reference: [`README.md`](README.md)
 
 ## 1. Overview
@@ -25,10 +25,12 @@ Router, Cache Components), TypeScript strict, Tailwind v4 + shadcn/ui, PostgreSQ
 | 11 | Settings & UX polish | **Complete** (§3, Phase 11) |
 | 12 | Final verification, Docker, deployment preparation | **Complete** (§3, Phase 12) — **not deployed**: Railway deployment is a manual step ([`RAILWAY_DEPLOYMENT.md`](RAILWAY_DEPLOYMENT.md)) |
 | 13 | Safe project cleanup | **Complete** (§3, Phase 13) |
+| 14 | Security, reliability & health audit (read-only) | **Complete** — report: [`SECURITY_HEALTH_AUDIT.md`](SECURITY_HEALTH_AUDIT.md) (verdict *ready with accepted risks*; findings not yet remediated) |
+| Final | Repository sanity & dead-code cleanup | **Complete** (§3, Final phase) — report: [`REPOSITORY_CLEANUP_REPORT.md`](REPOSITORY_CLEANUP_REPORT.md) |
 
-> **Repository state:** last commit `1bdd255 Phase 08.5`; Phases 09–12 are **uncommitted** in the
-> working tree. Railway builds from GitHub, so everything (incl. `assets/`, `docker/`, the fourth
-> migration) must be committed and pushed before deploying.
+> **Repository state:** Phases up to 14 are committed and pushed (`9464e6c Phase 14`); the final
+> cleanup is in the working tree on branch `cleanup/repository`, uncommitted. The owner reports
+> that DORA is deployed on Railway; the deployment was not verified by these phases.
 
 ## 2. Verification summary
 
@@ -288,6 +290,32 @@ Not executed: a real Railway deployment (by instruction), Railway's PostgreSQL v
 Docker image `dora:local` and volume `dora_dora-db` were kept (the local Compose database holds one
 session not created by these checks; untouched).
 
+### Phase 14 — Security, reliability & health audit
+
+Read-only audit of commit `c75956a`; no code changes. Findings, evidence and the remediation plan
+are in [`SECURITY_HEALTH_AUDIT.md`](SECURITY_HEALTH_AUDIT.md) (SEC-01 … SEC-09, REL-01 … REL-07).
+SEC-01 (no access control) is accepted by the owner. The other findings are open. It left a local
+database `dora_phase14_audit` (see the report §3).
+
+### Final phase — Repository sanity & dead-code cleanup
+
+Audit and evidence: [`REPOSITORY_CLEANUP_REPORT.md`](REPOSITORY_CLEANUP_REPORT.md). Applied after
+owner approval (no behaviour change):
+
+| Change | Evidence it was unused |
+| --- | --- |
+| Removed `src/components/ui/separator.tsx` | no import anywhere (S, knip) |
+| Removed `SCENARIO_SUBJECTS` (`lib/mock-ai/config/scenarios.ts`) | no reference (S, knip) |
+| Removed the re-export of the completeness functions from `lib/mock-ai/progress.ts` | all consumers import `lib/requirements/progress` (S, knip) |
+| Removed `ASSISTANT_FULL_NAME` (`config/app.ts`) | no reference (S, knip) |
+| `shadcn` moved from `dependencies` to `devDependencies` (same range `^4.22.1`) | build-time CSS import + CLI only; lockfile diff: only `dev`/`devOptional` flags, no version change (M) |
+
+Kept by decision (report §3 R2, R4–R6): unused Mock AI barrel re-exports and request types,
+`.dockerignore`/`.gitignore` as is. No dependency was unused or upgraded.
+
+Verification on a fresh clone with the changes applied: see the "Applied changes" section of the
+cleanup report.
+
 ### Specification items not yet implemented
 None in the application. Railway deployment is prepared but not performed (manual step).
 Acceptance scenarios A, B, C, D, G, H: PASS (Phase 08.5); **E**: PASS (Phase 09); **F**: PASS
@@ -414,8 +442,8 @@ were not present on the local PostgreSQL 14 instance at the start of Phase 09. P
 
 ## 10. Recommended next actions
 
-1. Commit Phases 09–12 (incl. `assets/`, `docker/`, `Dockerfile`, `compose.yaml`, the fourth
-   migration) and push to GitHub.
-2. Deploy manually following `RAILWAY_DEPLOYMENT.md`; afterwards record the Railway results
-   here (startup logs, migration logs, smoke test, PostgreSQL version).
-3. Optionally: turn the browser checks into a maintained E2E suite (M2).
+1. Review and commit the final cleanup (branch `cleanup/repository`).
+2. Record the Railway deployment results here (startup logs, migration logs, smoke test,
+   PostgreSQL version).
+3. Work through the remediation plan in `SECURITY_HEALTH_AUDIT.md` §11 as needed.
+4. Optionally: turn the browser checks into a maintained E2E suite (M2).
