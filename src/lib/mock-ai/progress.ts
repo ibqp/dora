@@ -12,13 +12,6 @@ import type { RequirementFields } from "@/lib/requirements/schemas";
 
 import { DISCOVERY_STAGE_LABELS, DISCOVERY_STAGE_ORDER, stageIndex } from "./state-machine";
 
-export {
-  calculateCompleteness,
-  calculateRequirementsCompleteness,
-  countCompletedFields,
-  listIncompleteFields,
-} from "@/lib/requirements/progress";
-
 export type StageProgressStatus = "completed" | "current" | "upcoming";
 
 export interface StageProgress {
